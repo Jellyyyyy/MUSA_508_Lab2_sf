@@ -64,46 +64,71 @@ Steps in this assignment:
 ## Load data from {tidycensus}
 
 ```{r acs_vars, cache = TRUE, message = FALSE, warning = FALSE, results=FALSE}
-acs_vars <- c( "[PUT YOUR VAR CODES HERE]")
+#Load census data dictionaries
+  
+vars <- load_variables(2019, "acs5")
+View(vars)
 
-myTracts <- c("[YOUR TRACTS GEOIDs HERE]")
+#My 2 new variables and selected neighborhood
+
+acs_vars <- c("C18130_001E", #Total pop
+              "C18130_004E", #Under18_disability_below poverty
+              "C18130_014E", #From 18to64_disability_below poverty
+              "C18130_018E", #Over65_disability_below poverty
+              "B17003_004E", #Male_Less than high school graduate_below poverty
+              "B17003_009E") #Female_Less than high school graduate_below poverty
+
+myTracts <- c("42101007400", 
+              "42101007300", 
+              "42101007200", 
+              "42101007102", 
+              "42101007101",
+              "42101007000") # Kingsessing Area
 
 acsTractsPHL.2019.sf <- get_acs(geography = "tract",
-                             year = 2019,
-                             variables = acs_vars,
-                             geometry = TRUE,
-                             state  = "PA",
-                             county = "Philadelphia",
-                             output = "wide") %>%
-  dplyr::select (GEOID, NAME, all_of(paste0(acs_vars,"E"))) %>%
-  rename ("[RENAME YOUR VARIABLES HERE]") %>%
-  mutate(Neighborhood = ifelse(GEOID %in% myTracts,
-                               "[YOUR NEIGHBORHOOD NAME HERE]",
-                               "REST OF PHILADELPHIA"))
+                                year = 2019, 
+                                variables = acs_vars, 
+                                geometry = TRUE, 
+                                state = "PA", 
+                                county = "Philadelphia", 
+                                output = "wide") %>% 
+  dplyr::select (GEOID, NAME, all_of(acs_vars)) %>%
+  rename (Total_pop.2019 = C18130_001E,
+          Under18_disability_belowpoverty.2019 = C18130_004E,
+          from18to64_disability_belowpoverty.2019 = C18130_014E,
+          Over65_disability_belowpoverty.2019 = C18130_018E,
+          Male_Lessthanhighschoolgraduate_belowpoverty.2019 = B17003_004E,
+          Female_Lessthanhighschoolgraduate_belowpoverty.2019 = B17003_009E) %>%
+  mutate(disability_povertyPct.2019 = (Under18_disability_belowpoverty.2019+from18to64_disability_belowpoverty.2019+Over65_disability_belowpoverty.2019)/Total_pop.2019,
+         education_povertyPct.2019= (Male_Lessthanhighschoolgraduate_belowpoverty.2019+Female_Lessthanhighschoolgraduate_belowpoverty.2019)/Total_pop.2019) %>%
+  mutate (Kingsessing = ifelse(GEOID %in% myTracts, "Kingsessing", "REST OF PHILADELPHIA"))
 ```
 
 ## Transform to WGS84 with {sf}
 
 ```{r}
-acsTractsPHL.2019.sf <- acsTractsPHL.2019.sf %>% 
-  st_transform(crs = "[PUT THE WGS84 EPSG CODE HERE]")
+acsTractsPHL.2019.sf_WGS84 <- acsTractsPHL.2019.sf %>% 
+  st_transform(crs = "EPSG:4326")
+
 ```
 
 ## Plot with {ggplot2}
 
-```{r ggplot_geom_sf, warning = FALSE, echo = FALSE}
-ggplot()+
-  geom_sf(data = acsTractsPHL.2019.sf, aes(fill = "[YOUR VARIABLE NAME HERE]"),
-          color = "transparent")+
+```{r ggplot_geom_sf, warning = FALSE, echo = TRUE}
+pp <- ggplot()+
+  geom_sf(data = acsTractsPHL.2019.sf, aes(fill = disability_povertyPct.2019),
+          color = "transparent", )+
   geom_sf(data = acsTractsPHL.2019.sf %>%
-            filter(Neighborhood == "[YOUR NEIGHBORHOOD NAME HERE]") %>%
+            filter(Kingsessing == "Kingsessing") %>%
             st_union(),
-          color = "white",
+          color = "red",
           fill = "transparent")+
-  # Bonus to figure out different color ramps with scale_fill_viridis()
   labs(
-    title = "[YOUR TITLE HERE]",
-    subtitle = "[YOUR SUBTITLE HERE]",
-    caption = "[YOUR CAPTION HERE]")
+    title = "Percentage of those identifying as 'disability' and 'below poverty' by tract",
+    subtitle = "",
+    caption = "Data: US Census Bureau, ACS 5-year estimates")
+library(viridisLite)
+library(viridis)
+pp + scale_fill_viridis(discrete = FALSE)
 
 ```
